@@ -8,8 +8,7 @@ import { Input } from '@/components/ui/input';
 import { generateToken, TokenStorage, UserStorage } from '@/lib/auth';
 import { v4 as uuidv4 } from 'uuid';
 import { hashPin } from '@/lib/pinHash';
-import { createUser, createAccount } from '@/lib/firebase';
-import PinInput from '@/components/PinInput';
+import PinInput from '@/components/pin-input';
 
 type SetupStep = 'initial' | 'pin' | 'confirm-pin' | 'balance' | 'account';
 

@@ -40,8 +40,26 @@ export interface Category {
   id: string;
   userId: string;
   name: string;
-  type: 'income' | 'expense' | 'subscription';
+  type: 'income' | 'expense' | 'subscription' | 'debt';
   color?: string;
+}
+
+export interface PersonDebt {
+  id: string;
+  userId: string;
+  personName: string;
+  createdAt: Date;
+}
+
+export interface Debt {
+  id: string;
+  userId: string;
+  personDebtId: string;
+  type: 'lent' | 'borrowed'; // lent: money you gave them, borrowed: money you took
+  amount: number;
+  description: string;
+  status: 'pending' | 'paid'; // pending: not fully paid, paid: fully resolved
+  createdAt: Date;
 }
 
 export interface AuthToken {
@@ -84,6 +102,9 @@ export const DEFAULT_SUBSCRIPTION_CATEGORIES = [
   'Shopping',
   'Other',
 ];
+
+// Note: Debt tracking is now separate from transactions
+// Debts are for reminders only (lent/borrowed), not actual transaction records
 
 // Currency formatting
 export const CURRENCY_SYMBOL = '₹';

@@ -20,6 +20,8 @@ import type {
   Transaction,
   Budget,
   Category,
+  PersonDebt,
+  Debt,
 } from './types';
 
 // User operations
@@ -293,10 +295,146 @@ export async function getCategories(userId: string): Promise<Category[]> {
     where('userId', '==', userId)
   );
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((doc) => ({
-    ...doc.data(),
-    id: doc.id,
-  })) as Category[];
+  return snapshot.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      ...data,
+      id: doc.id,
+      createdAt:
+        data.createdAt instanceof Timestamp
+          ? data.createdAt.toDate()
+          : new Date(data.createdAt),
+    } as Category;
+  });
+}
+
+// Person Debt operations
+export async function createPersonDebt(
+  userId: string,
+  personName: string
+): Promise<PersonDebt> {
+  const personDebtRef = collection(db, 'personDebts');
+  const docRef = await addDoc(personDebtRef, {
+    userId,
+    personName,
+    createdAt: Timestamp.now(),
+  });
+
+  return {
+    id: docRef.id,
+    userId,
+    personName,
+    createdAt: new Date(),
+  };
+}
+
+export async function getPersonDebts(userId: string): Promise<PersonDebt[]> {
+  const q = query(
+    collection(db, 'personDebts'),
+    where('userId', '==', userId)
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      ...data,
+      id: doc.id,
+      createdAt:
+        data.createdAt instanceof Timestamp
+          ? data.createdAt.toDate()
+          : new Date(data.createdAt),
+    } as PersonDebt;
+  });
+}
+
+export async function deletePersonDebt(personDebtId: string): Promise<void> {
+  // Delete all debts associated with this person
+  const debtsToDelete = await getDebts('', [
+    where('personDebtId', '==', personDebtId),
+  ]);
+
+  if (debtsToDelete.length > 0) {
+    const batch = writeBatch(db);
+    debtsToDelete.forEach((debt) => {
+      batch.delete(doc(db, 'debts', debt.id));
+    });
+    await batch.commit();
+  }
+
+  // Delete the person record
+  await deleteDoc(doc(db, 'personDebts', personDebtId));
+}
+
+// Debt operations (individual debts for a person)
+export async function createDebt(
+  userId: string,
+  personDebtId: string,
+  type: 'lent' | 'borrowed',
+  amount: number,
+  description: string
+): Promise<Debt> {
+  const debtRef = collection(db, 'debts');
+  const docRef = await addDoc(debtRef, {
+    userId,
+    personDebtId,
+    type,
+    amount,
+    description,
+    status: 'pending',
+    createdAt: Timestamp.now(),
+  });
+
+  return {
+    id: docRef.id,
+    userId,
+    personDebtId,
+    type,
+    amount,
+    description,
+    status: 'pending',
+    createdAt: new Date(),
+  };
+}
+
+export async function getDebts(
+  userId: string,
+  constraints?: QueryConstraint[]
+): Promise<Debt[]> {
+  const defaultConstraints = [where('userId', '==', userId)];
+  const allConstraints = [...defaultConstraints, ...(constraints || [])];
+
+  const q = query(collection(db, 'debts'), ...allConstraints);
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      ...data,
+      id: doc.id,
+      createdAt:
+        data.createdAt instanceof Timestamp
+          ? data.createdAt.toDate()
+          : new Date(data.createdAt),
+    } as Debt;
+  });
+}
+
+export async function updateDebt(
+  debtId: string,
+  updates: Partial<Debt>
+): Promise<void> {
+  const updateData = Object.fromEntries(
+    Object.entries(updates).filter(
+      ([key]) => key !== 'id' && key !== 'userId' && key !== 'personDebtId' && key !== 'createdAt'
+    )
+  );
+
+  if (Object.keys(updateData).length > 0) {
+    await updateDoc(doc(db, 'debts', debtId), updateData);
+  }
+}
+
+export async function deleteDebt(debtId: string): Promise<void> {
+  await deleteDoc(doc(db, 'debts', debtId));
 }
 
 // Backup and CSV export
@@ -306,12 +444,24 @@ export async function getFullUserData(userId: string): Promise<{
   transactions: Transaction[];
   budgets: Budget[];
   categories: Category[];
+  personDebts: PersonDebt[];
+  debts: Debt[];
 }> {
   const user = await getUser(userId);
   const accounts = await getAccounts(userId);
   const transactions = await getTransactions(userId);
   const budgets = await getBudgets(userId);
   const categories = await getCategories(userId);
+  const personDebts = await getPersonDebts(userId);
+  const debts = await getDebts(userId);
 
-  return { user, accounts, transactions, budgets, categories };
+  return {
+    user,
+    accounts,
+    transactions,
+    budgets,
+    categories,
+    personDebts,
+    debts,
+  };
 }

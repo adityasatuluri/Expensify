@@ -10,6 +10,13 @@ import {
   updateAccountBalance,
   createCategory,
   getCategories,
+  createPersonDebt,
+  getPersonDebts,
+  deletePersonDebt,
+  createDebt,
+  getDebts,
+  deleteDebt,
+  updateDebt,
 } from '@/lib/db-service';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -20,12 +27,16 @@ import AccountManager from '@/components/account-manager';
 import Analytics from '@/components/analytics';
 import BudgetTracker from '@/components/budget-tracker';
 import ThemeToggle from '@/components/theme-toggle';
-import type { Account, Transaction } from '@/lib/types';
+import DebtTracker from '@/components/debt-tracker';
+import CSVImport from '@/components/csv-import';
+import type { Account, Transaction, PersonDebt, Debt } from '@/lib/types';
 
 export default function DashboardPage() {
   const router = useRouter();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [personDebts, setPersonDebts] = useState<PersonDebt[]>([]);
+  const [debts, setDebts] = useState<Debt[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
@@ -44,6 +55,8 @@ export default function DashboardPage() {
         const userAccounts = await getAccounts(userId);
         const userTransactions = await getTransactions(userId);
         const userCategories = await getCategories(userId);
+        const userPersonDebts = await getPersonDebts(userId);
+        const userDebts = await getDebts(userId);
 
         // Initialize default categories if needed
         if (userCategories.length === 0) {
@@ -58,6 +71,8 @@ export default function DashboardPage() {
         setTransactions(userTransactions.sort((a, b) => 
           new Date(b.date).getTime() - new Date(a.date).getTime()
         ));
+        setPersonDebts(userPersonDebts);
+        setDebts(userDebts);
       } catch (err) {
         setError('Failed to load data.');
         console.error('Load error:', err);
@@ -113,6 +128,139 @@ export default function DashboardPage() {
     } catch (err) {
       setError('Failed to add transaction.');
       console.error('Add transaction error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddPerson = async (personName: string) => {
+    const userId = UserStorage.getUserId();
+    if (!userId) return;
+
+    setIsLoading(true);
+    try {
+      const newPerson = await createPersonDebt(userId, personName);
+      setPersonDebts([newPerson, ...personDebts]);
+    } catch (err) {
+      setError('Failed to add person.');
+      console.error('Add person error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRemovePerson = async (personDebtId: string) => {
+    setIsLoading(true);
+    try {
+      await deletePersonDebt(personDebtId);
+      setPersonDebts(personDebts.filter((p) => p.id !== personDebtId));
+      setDebts(debts.filter((d) => d.personDebtId !== personDebtId));
+    } catch (err) {
+      setError('Failed to remove person.');
+      console.error('Remove person error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddDebt = async (
+    personDebtId: string,
+    type: 'lent' | 'borrowed',
+    amount: number,
+    description: string
+  ) => {
+    const userId = UserStorage.getUserId();
+    if (!userId) return;
+
+    setIsLoading(true);
+    try {
+      const newDebt = await createDebt(userId, personDebtId, type, amount, description);
+      setDebts([newDebt, ...debts]);
+    } catch (err) {
+      setError('Failed to add debt.');
+      console.error('Add debt error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRemoveDebt = async (debtId: string) => {
+    setIsLoading(true);
+    try {
+      await deleteDebt(debtId);
+      setDebts(debts.filter((d) => d.id !== debtId));
+    } catch (err) {
+      setError('Failed to remove debt.');
+      console.error('Remove debt error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleMarkAsPaid = async (debtId: string) => {
+    setIsLoading(true);
+    try {
+      await updateDebt(debtId, { status: 'paid' });
+      setDebts(debts.map((d) => (d.id === debtId ? { ...d, status: 'paid' } : d)));
+    } catch (err) {
+      setError('Failed to mark as paid.');
+      console.error('Mark as paid error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleImportCSV = async (csvTransactions: Omit<Transaction, 'id' | 'userId' | 'createdAt'>[]) => {
+    const userId = UserStorage.getUserId();
+    if (!userId) return;
+
+    setIsLoading(true);
+    try {
+      const newTransactions: Transaction[] = [];
+      let totalBalance = 0;
+
+      // Create all transactions
+      for (const txn of csvTransactions) {
+        const newTransaction = await createTransaction(
+          userId,
+          txn.accountId,
+          txn.type,
+          txn.amount,
+          txn.category,
+          txn.description,
+          txn.date
+        );
+        newTransactions.push(newTransaction);
+      }
+
+      // Update account balances
+      const accountUpdates = new Map<string, number>();
+      csvTransactions.forEach((txn) => {
+        const current = accountUpdates.get(txn.accountId) || 0;
+        if (txn.type === 'income') {
+          accountUpdates.set(txn.accountId, current + txn.amount);
+        } else {
+          accountUpdates.set(txn.accountId, current - txn.amount);
+        }
+      });
+
+      const updatedAccounts = [...accounts];
+      for (const [accountId, balanceChange] of accountUpdates.entries()) {
+        const account = updatedAccounts.find((a) => a.id === accountId);
+        if (account) {
+          const newBalance = account.balance + balanceChange;
+          await updateAccountBalance(accountId, newBalance);
+          account.balance = newBalance;
+        }
+      }
+
+      setAccounts(updatedAccounts);
+      setTransactions([...newTransactions.sort((a, b) => 
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+      ), ...transactions]);
+    } catch (err) {
+      setError(`Failed to import transactions: ${(err as Error).message}`);
+      console.error('Import CSV error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -193,10 +341,11 @@ export default function DashboardPage() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5 mb-6 h-auto">
+          <TabsList className="grid w-full grid-cols-6 mb-6 h-auto">
             <TabsTrigger value="overview" className="text-xs sm:text-sm py-2">Overview</TabsTrigger>
             <TabsTrigger value="transactions" className="text-xs sm:text-sm py-2">Txns</TabsTrigger>
             <TabsTrigger value="budgets" className="text-xs sm:text-sm py-2">Budgets</TabsTrigger>
+            <TabsTrigger value="debts" className="text-xs sm:text-sm py-2">Debts</TabsTrigger>
             <TabsTrigger value="analytics" className="text-xs sm:text-sm py-2">Analytics</TabsTrigger>
             <TabsTrigger value="accounts" className="text-xs sm:text-sm py-2">Accounts</TabsTrigger>
           </TabsList>
@@ -221,14 +370,21 @@ export default function DashboardPage() {
             <Card className="p-3 sm:p-6">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
                 <h2 className="text-base sm:text-lg font-semibold">All Transactions</h2>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.location.href = '/dashboard/transactions'}
-                  className="w-full sm:w-auto"
-                >
-                  View All & Export
-                </Button>
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <CSVImport
+                    accounts={accounts}
+                    onImport={handleImportCSV}
+                    isLoading={isLoading}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.location.href = '/dashboard/transactions'}
+                    className="flex-1 sm:flex-none"
+                  >
+                    View All & Export
+                  </Button>
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <TransactionList transactions={transactions} />
@@ -239,6 +395,20 @@ export default function DashboardPage() {
           {/* Budgets Tab */}
           <TabsContent value="budgets">
             <BudgetTracker transactions={transactions} />
+          </TabsContent>
+
+          {/* Debts Tab */}
+          <TabsContent value="debts">
+            <DebtTracker
+              personDebts={personDebts}
+              debts={debts}
+              onAddPerson={handleAddPerson}
+              onRemovePerson={handleRemovePerson}
+              onAddDebt={handleAddDebt}
+              onRemoveDebt={handleRemoveDebt}
+              onMarkAsPaid={handleMarkAsPaid}
+              isLoading={isLoading}
+            />
           </TabsContent>
 
           {/* Analytics Tab */}

@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useMemo, useState } from 'react';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { useMemo, useState } from "react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   BarChart,
   Bar,
@@ -17,32 +17,39 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
-} from 'recharts';
-import { CURRENCY_SYMBOL } from '@/lib/types';
-import type { Transaction } from '@/lib/types';
+} from "recharts";
+import { CURRENCY_SYMBOL } from "@/lib/types";
+import type { Transaction } from "@/lib/types";
 
 interface AnalyticsProps {
   transactions: Transaction[];
 }
 
-type TimeRange = 'monthly' | 'yearly' | 'all';
+type TimeRange = "monthly" | "yearly" | "all";
 
-const COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+const COLORS = [
+  "#3b82f6",
+  "#ef4444",
+  "#10b981",
+  "#f59e0b",
+  "#8b5cf6",
+  "#ec4899",
+];
 
 export default function Analytics({ transactions }: AnalyticsProps) {
-  const [timeRange, setTimeRange] = useState<TimeRange>('monthly');
+  const [timeRange, setTimeRange] = useState<TimeRange>("monthly");
 
   const stats = useMemo(() => {
     const expenses = transactions
-      .filter((t) => t.type === 'expense')
+      .filter((t) => t.type === "expense")
       .reduce((sum, t) => sum + t.amount, 0);
 
     const income = transactions
-      .filter((t) => t.type === 'income')
+      .filter((t) => t.type === "income")
       .reduce((sum, t) => sum + t.amount, 0);
 
     const subscriptions = transactions
-      .filter((t) => t.type === 'subscription')
+      .filter((t) => t.type === "subscription")
       .reduce((sum, t) => sum + t.amount, 0);
 
     const net = income - expenses - subscriptions;
@@ -54,7 +61,7 @@ export default function Analytics({ transactions }: AnalyticsProps) {
     const categories: { [key: string]: number } = {};
 
     transactions
-      .filter((t) => t.type === 'expense')
+      .filter((t) => t.type === "expense" || t.type === "subscription")
       .forEach((t) => {
         categories[t.category] = (categories[t.category] || 0) + t.amount;
       });
@@ -70,14 +77,22 @@ export default function Analytics({ transactions }: AnalyticsProps) {
       income: number;
       expense: number;
       subscription: number;
+      timestamp: number;
     }[] = [];
-    const months: { [key: string]: { income: number; expense: number; subscription: number } } = {};
+    const months: {
+      [key: string]: {
+        income: number;
+        expense: number;
+        subscription: number;
+        timestamp: number;
+      };
+    } = {};
 
     let startDate = new Date();
-    if (timeRange === 'monthly') {
+    if (timeRange === "monthly") {
       startDate = new Date();
       startDate.setMonth(startDate.getMonth() - 1);
-    } else if (timeRange === 'yearly') {
+    } else if (timeRange === "yearly") {
       startDate = new Date();
       startDate.setFullYear(startDate.getFullYear() - 1);
     } else {
@@ -93,26 +108,41 @@ export default function Analytics({ transactions }: AnalyticsProps) {
       .forEach((t) => {
         const date = new Date(t.date);
         const key =
-          timeRange === 'yearly'
-            ? date.toLocaleString('default', { month: 'short', year: '2-digit' })
-            : date.toLocaleString('default', { month: 'short', day: 'numeric' });
+          timeRange === "yearly"
+            ? date.toLocaleString("default", {
+                month: "short",
+                year: "2-digit",
+              })
+            : date.toLocaleString("default", {
+                month: "short",
+                day: "numeric",
+              });
 
         if (!months[key]) {
-          months[key] = { income: 0, expense: 0, subscription: 0 };
+          months[key] = {
+            income: 0,
+            expense: 0,
+            subscription: 0,
+            timestamp: date.getTime(),
+          };
         }
 
-        if (t.type === 'income') {
+        if (t.type === "income") {
           months[key].income += t.amount;
-        } else if (t.type === 'expense') {
+        } else if (t.type === "expense") {
           months[key].expense += t.amount;
         } else {
           months[key].subscription += t.amount;
         }
       });
 
-    Object.entries(months).forEach(([month, values]) => {
-      data.push({ month, ...values });
-    });
+    Object.entries(months)
+      .map(([month, values]) => ({ month, ...values }))
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .forEach((item) => {
+        const { timestamp, ...rest } = item;
+        data.push(rest);
+      });
 
     return data;
   }, [transactions, timeRange]);
@@ -124,25 +154,31 @@ export default function Analytics({ transactions }: AnalyticsProps) {
         <Card className="p-4">
           <p className="text-sm text-muted-foreground mb-1">Income</p>
           <p className="text-2xl font-bold text-green-600">
-            {CURRENCY_SYMBOL}{stats.income.toFixed(2)}
+            {CURRENCY_SYMBOL}
+            {stats.income.toFixed(2)}
           </p>
         </Card>
         <Card className="p-4">
           <p className="text-sm text-muted-foreground mb-1">Expenses</p>
           <p className="text-2xl font-bold text-red-600">
-            {CURRENCY_SYMBOL}{stats.expenses.toFixed(2)}
+            {CURRENCY_SYMBOL}
+            {stats.expenses.toFixed(2)}
           </p>
         </Card>
         <Card className="p-4">
           <p className="text-sm text-muted-foreground mb-1">Subscriptions</p>
           <p className="text-2xl font-bold text-blue-600">
-            {CURRENCY_SYMBOL}{stats.subscriptions.toFixed(2)}
+            {CURRENCY_SYMBOL}
+            {stats.subscriptions.toFixed(2)}
           </p>
         </Card>
         <Card className="p-4">
           <p className="text-sm text-muted-foreground mb-1">Net</p>
-          <p className={`text-2xl font-bold ${stats.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {CURRENCY_SYMBOL}{stats.net.toFixed(2)}
+          <p
+            className={`text-2xl font-bold ${stats.net >= 0 ? "text-green-600" : "text-red-600"}`}
+          >
+            {CURRENCY_SYMBOL}
+            {stats.net.toFixed(2)}
           </p>
         </Card>
       </div>
@@ -150,23 +186,23 @@ export default function Analytics({ transactions }: AnalyticsProps) {
       {/* Time Range Selector */}
       <div className="flex gap-2">
         <Button
-          variant={timeRange === 'monthly' ? 'default' : 'outline'}
+          variant={timeRange === "monthly" ? "default" : "outline"}
           size="sm"
-          onClick={() => setTimeRange('monthly')}
+          onClick={() => setTimeRange("monthly")}
         >
           Monthly
         </Button>
         <Button
-          variant={timeRange === 'yearly' ? 'default' : 'outline'}
+          variant={timeRange === "yearly" ? "default" : "outline"}
           size="sm"
-          onClick={() => setTimeRange('yearly')}
+          onClick={() => setTimeRange("yearly")}
         >
           Yearly
         </Button>
         <Button
-          variant={timeRange === 'all' ? 'default' : 'outline'}
+          variant={timeRange === "all" ? "default" : "outline"}
           size="sm"
-          onClick={() => setTimeRange('all')}
+          onClick={() => setTimeRange("all")}
         >
           All Time
         </Button>
@@ -210,7 +246,10 @@ export default function Analytics({ transactions }: AnalyticsProps) {
                   dataKey="value"
                 >
                   {categoryBreakdown.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={COLORS[index % COLORS.length]}
+                    />
                   ))}
                 </Pie>
                 <Tooltip formatter={(value) => `${CURRENCY_SYMBOL}${value}`} />
@@ -246,10 +285,14 @@ export default function Analytics({ transactions }: AnalyticsProps) {
         <h3 className="font-semibold mb-4">Category Details</h3>
         <div className="space-y-2">
           {categoryBreakdown.map((category) => (
-            <div key={category.name} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+            <div
+              key={category.name}
+              className="flex justify-between items-center p-3 bg-muted/50 rounded-lg"
+            >
               <span className="font-medium">{category.name}</span>
               <span className="text-sm font-semibold">
-                {CURRENCY_SYMBOL}{category.value.toFixed(2)}
+                {CURRENCY_SYMBOL}
+                {category.value.toFixed(2)}
               </span>
             </div>
           ))}

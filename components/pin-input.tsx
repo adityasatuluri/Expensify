@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import React from "react"
+import React from "react";
 
-import { useRef, useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { useRef, useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 
 interface PinInputProps {
   length?: number;
@@ -16,11 +16,11 @@ export default function PinInput({
   onComplete,
   isLoading = false,
 }: PinInputProps) {
-  const [pin, setPin] = useState<string[]>(new Array(length).fill(''));
+  const [pin, setPin] = useState<string[]>(new Array(length).fill(""));
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const handleChange = (index: number, value: string) => {
-    const sanitizedValue = value.replace(/[^0-9]/g, '');
+    const sanitizedValue = value.replace(/[^0-9]/g, "");
 
     if (sanitizedValue.length > 1) {
       // Handle paste
@@ -50,34 +50,34 @@ export default function PinInput({
       }
 
       // Check if complete
-      if (newPin.every((digit) => digit !== '')) {
-        onComplete(newPin.join(''));
+      if (newPin.every((digit) => digit !== "")) {
+        onComplete(newPin.join(""));
       }
     }
   };
 
   const handleKeyDown = (
     index: number,
-    e: React.KeyboardEvent<HTMLInputElement>
+    e: React.KeyboardEvent<HTMLInputElement>,
   ) => {
-    if (e.key === 'Backspace') {
+    if (e.key === "Backspace") {
       e.preventDefault();
       const newPin = [...pin];
       if (pin[index]) {
-        newPin[index] = '';
+        newPin[index] = "";
         setPin(newPin);
       } else if (index > 0) {
         inputRefs.current[index - 1]?.focus();
       }
-    } else if (e.key === 'ArrowLeft' && index > 0) {
+    } else if (e.key === "ArrowLeft" && index > 0) {
       inputRefs.current[index - 1]?.focus();
-    } else if (e.key === 'ArrowRight' && index < length - 1) {
+    } else if (e.key === "ArrowRight" && index < length - 1) {
       inputRefs.current[index + 1]?.focus();
     }
   };
 
   const clearPin = () => {
-    setPin(new Array(length).fill(''));
+    setPin(new Array(length).fill(""));
     inputRefs.current[0]?.focus();
   };
 
@@ -98,10 +98,19 @@ export default function PinInput({
               onChange={(e) => handleChange(index, e.target.value)}
               onKeyDown={(e) => handleKeyDown(index, e)}
               disabled={isLoading}
-              className="w-12 h-12 sm:w-14 sm:h-14 text-center text-xl sm:text-2xl font-bold border-2 border-primary rounded-lg focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 disabled:opacity-50 transition-all"
               inputMode="numeric"
               autoComplete="off"
+              className="
+    w-12 h-12 sm:w-14 sm:h-14
+    text-center text-xl sm:text-2xl font-bold
+    border-2 border-primary rounded-lg
+    focus:outline-none focus:border-primary
+    focus:ring-2 focus:ring-primary/30
+    disabled:opacity-50 transition-all
+    text-transparent caret-transparent
+  "
             />
+
             {digit && (
               <div className="absolute inset-0 flex items-center justify-center text-xl sm:text-2xl font-bold text-primary pointer-events-none">
                 *
